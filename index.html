@@ -722,6 +722,7 @@
       <button class="menu-btn ghost" id="openCodex">📖 Word Codex</button>
       <button class="menu-btn ghost" id="openSettings">🎛 Settings</button>
       <button class="menu-btn ghost" id="openStoryLog">📜 Story</button>
+      <button class="menu-btn ghost arcade-shop-btn" id="openShop">🛒 Shop</button>
     </div>
   </div>
 
@@ -826,11 +827,13 @@
     <div class="menu-brand small"><h2>PAUSED</h2></div>
     <div class="menu-actions col">
       <button class="menu-btn" id="resumeBtn">▶ Resume</button>
+      <button class="menu-btn ghost arcade-shop-btn" id="pauseShopBtn">🛒 Shop</button>
       <button class="menu-btn ghost" id="exitBtn">⏏ Exit to menu</button>
     </div>
   </div>
 </div>
 
+<script src="arcade-shop.js"></script>
 <script>
 (()=>{
 "use strict";
@@ -1212,16 +1215,16 @@ function updateUnit(u,dt){
     for(const o of G.units){if(o.dead||o.team!=='ally'||o===u||o.hp>=o.maxHp)continue;
       const d=Math.hypot(o.x-u.x,(o.y-u.y)*60);if(d<bd){bd=d;best=o;}}
     if(best){ if(bd>u.def.range)moveToward(u,best.x,best.y,dt);
-      else{u.cool-=dt;if(u.cool<=0){u.cool=u.def.rate;best.hp=Math.min(best.maxHp,best.hp+u.def.heal);
+      else{u.cool-=dt;if(u.cool<=0){u.cool=abRate(u,u.def.rate);best.hp=Math.min(best.maxHp,best.hp+u.def.heal);
         floater(best.x,best.y,'+'+u.def.heal,'#8fffce');beam(u,best,'#8fffce');}} return; }
   }
   const tgt=nearestEnemy(u);
   if(!tgt){
     const baseX = u.team==='ally'? FOE_BASE_X : OUR_BASE_X;
     if(Math.abs(u.x-baseX)>44){ moveToward(u,baseX,u.y,dt); }
-    else { u.cool-=dt; if(u.cool<=0){u.cool=u.def.rate;u.atk=0.2;
+    else { u.cool-=dt; if(u.cool<=0){u.cool=abRate(u,u.def.rate);u.atk=0.2;
       if(u.team==='ally'){
-        G.foe-=u.def.dmg; G.foeHpShow=2.2;
+        G.foe-=abDmg(u,u.def.dmg); G.foeHpShow=2.2;
         if(G.foe<=0 && !G._portalDown){ G._portalDown=true; onPortalDestroyed(); }
         // the foe base bites back — a wounded attacker can die here
         applyHit({team:'zombie',def:{dmg:FOE_BASE_DMG}}, u, FOE_BASE_DMG);
@@ -1234,9 +1237,9 @@ function updateUnit(u,dt){
     return;
   }
   if(tgt.dist>u.def.range){ moveToward(u,tgt.x,tgt.y,dt); }
-  else { u.cool-=dt; if(u.cool<=0){u.cool=u.def.rate;u.atk=0.2;
+  else { u.cool-=dt; if(u.cool<=0){u.cool=abRate(u,u.def.rate);u.atk=0.2;
     if(tgt.isNode){ const node=tgt.t.node; if(node && node.building){
-        node.building.hp-=u.def.dmg; node.hpShow=2.2; hitSpark(tgt.x,tgt.y,u.def.color);
+        node.building.hp-=abDmg(u,u.def.dmg); node.hpShow=2.2; hitSpark(tgt.x,tgt.y,u.def.color);
         if(node.building.hp<=0){node.building=null;node.owner='neutral';} } }
     else dealDamage(u,tgt.t);
     if(u.def.range>60) projectile(u,tgt.x,tgt.y); } }
@@ -1257,7 +1260,8 @@ function moveToward(u,tx,ty,dt){
 }
 function dealDamage(u,o){
   if(u.def.splash){ for(const z of G.units){if(z.dead||z.team===u.team)continue;
-    if(Math.hypot(z.x-o.x,(z.y-o.y)*60)<=u.def.splash){applyHit(u,z,u.def.dmg);affixOnHit(u,z);}} hitSpark(o.x,o.y,u.def.color); }
+    if(Math.hypot(z.x-o.x,(z.y-o.y)*60)<=u.def.splash){applyHit(u,z,u.def.dmg);affixOnHit(u,z);}}
+    hitSpark(o.x,o.y,(u.team==='ally'&&u.def.range>60&&skinBullet())||u.def.color); }
   else { applyHit(u,o,u.def.dmg); affixOnHit(u,o); }
   if(u.def.steal){G.gold+=u.def.steal;floater(u.x,u.y,'💎 +'+u.def.steal,'#f2c84b');updateHUD();}
 }
@@ -1299,7 +1303,7 @@ function zapChain(u,first){
 }
 function applyHit(u,o,dmg){
   if(o.shieldT>0){ o.hitFlash=0.15; hitSpark(o.x,o.y); return; }  // Shield Wall — full block
-  o.hp-=dmg;o.hitFlash=0.15;o.hpShow=2.2; if(o.hp<=0&&!o.dead)killUnit(o); }
+  o.hp-=abDmg(u,dmg);o.hitFlash=0.15;o.hpShow=2.2; if(o.hp<=0&&!o.dead)killUnit(o); }  // ⚡ power: player side only
 // ===== active skills =====
 // find enemies of `u` within world-radius r of point (px,py)
 function enemiesNear(u,px,py,r){
@@ -1309,6 +1313,12 @@ function enemiesNear(u,px,py,r){
   return out;
 }
 function fireSkill(u){
+  const mk=skinMark();
+  const fired=fireSkillCore(u);
+  if(fired) skinTintSince(mk);        // arcade ability skin (cosmetic only)
+  return fired;
+}
+function fireSkillCore(u){
   if(!u||u.dead||!u.skillReady)return false;
   const key=u.type;
   const done=()=>{ u.skillReady=false; u.skillT=0; sfx('unlock'); };
@@ -1481,10 +1491,12 @@ function bigBanner(title,sub){
   b.classList.remove('show'); void b.offsetWidth; b.classList.add('show');
   clearTimeout(b._t); b._t=setTimeout(()=>b.classList.remove('show'),3600);
 }
-function projectile(u,tx,ty,h0){G.fx.push({type:'proj',x:u.x,y:u.y,tx,ty,t:0,dur:0.22,color:u.def.color,h0});
+function projectile(u,tx,ty,h0){
+  const ally=u.team!=='zombie';    // clones, towers and the base turret (no team) are our side
+  G.fx.push({type:'proj',x:u.x,y:u.y,tx,ty,t:0,dur:0.22,color:u.def.color,h0,ally});
   // muzzle flash at the shooter
   const dir=Math.atan2(0,(tx-u.x))|0;
-  spawnParticles(u.x,u.y,lighten(u.def.color,0.4),{n:3,spd:50,life:0.18,size:2.2,hy:h0||30,spread:1.2,dir:(tx>u.x?0:Math.PI),grav:0});
+  spawnParticles(u.x,u.y,(ally&&skinGlow())||lighten(u.def.color,0.4),{n:3,spd:50,life:0.18,size:2.2,hy:h0||30,spread:1.2,dir:(tx>u.x?0:Math.PI),grav:0});
 }
 function beam(u,o,color){G.fx.push({type:'beam',x:u.x,y:u.y,tx:o.x,ty:o.y,life:0.15,max:0.15,color});}
 
@@ -1496,7 +1508,7 @@ function updateNodes(dt){
     if(b.def.dmg){b.cool-=dt;if(b.cool<=0){
       let best=null,bd=b.def.range;for(const o of G.units){if(o.dead||o.team!=='zombie')continue;
         const d=Math.hypot(o.x-n.x,(o.y-n.y)*60);if(d<bd){bd=d;best=o;}}
-      if(best){b.cool=b.def.rate;applyHit({team:'ally',def:{dmg:b.def.dmg}},best,b.def.dmg);
+      if(best){b.cool=abRate(null,b.def.rate);applyHit({team:'ally',def:{dmg:b.def.dmg}},best,b.def.dmg);
         projectile({x:n.x,y:n.y,def:{color:b.def.color}},best.x,best.y);}}}
   }
 }
@@ -1504,7 +1516,7 @@ function updateBaseTurret(dt){
   G._tc=(G._tc||0)-dt; if(G._tc>0)return;
   let best=null,bd=1e9; for(const o of G.units){if(o.dead||o.team!=='zombie')continue;
     if(o.x<OUR_BASE_X+260){const d=o.x-OUR_BASE_X;if(d<bd){bd=d;best=o;}}}
-  if(best){G._tc=0.9;applyHit({team:'ally',def:{dmg:14}},best,14);
+  if(best){G._tc=abRate(null,0.9);applyHit({team:'ally',def:{dmg:14}},best,14);
     // fire from the machine-gun muzzle on top of the tower, not the base
     projectile({x:OUR_BASE_X+14,y:BASE_LANE,def:{color:'#8fffce'}},best.x,best.y,138);}
 }
@@ -1660,6 +1672,10 @@ function updateReviveBars(){
     }
     G.zones=G.zones.filter(z=>z.t>0);
   }
+  // ⚡ regen (arcade ability): base repairs v HP every 2s of active battle time, capped at max
+  G._regenT=(G._regenT||0)+dt;
+  while(G._regenT>=2){ G._regenT-=2;
+    if(ARCADE_AB.regen>0 && G.base>0 && G.base<G.baseMax){ G.base=Math.min(G.baseMax,G.base+ARCADE_AB.regen); updateHUD(); } }
   if(G.baseHpShow>0)G.baseHpShow-=dt;
   if(G.foeHpShow>0)G.foeHpShow-=dt;
   for(const n of G.nodes)if(n.hpShow>0)n.hpShow-=dt;
@@ -1680,7 +1696,7 @@ function updateReviveBars(){
 function draw(t){
   ctx.clearRect(0,0,VW,VH);
   drawField(t);
-  drawBase(OUR_BASE_X,'#8fffce','🏠',G.base,100,'tower',G.baseHpShow||0);
+  drawBase(OUR_BASE_X,'#8fffce','🏠',G.base,G.baseMax||100,'tower',G.baseHpShow||0);
   drawBase(FOE_BASE_X,'#ff6b5e','☣',G.foe,G.foeMax||100,'portal',G.foeHpShow||0);
   if(G.riftOn) drawRiftMeter();
   for(const n of G.nodes)drawNode(n);
@@ -1689,12 +1705,16 @@ function draw(t){
     const h0=(f.h0!=null?f.h0:34);                 // start height above ground (px)
     const hh=h0+(34-h0)*p;                          // lerp toward chest height
     const x=sx(wx,wy), yy=sy(wy)-hh;
-    ctx.fillStyle=f.color;ctx.beginPath();ctx.arc(x,yy,3.2,0,7);ctx.fill();
+    const gunC=f.ally&&skinBullet();               // arcade gun skin (player shots only)
+    if(gunC){ const gg=ctx.createRadialGradient(x,yy,0,x,yy,9);
+      gg.addColorStop(0,skinRgba(skinGlow(),0.85));gg.addColorStop(1,skinRgba(skinGlow(),0));
+      ctx.fillStyle=gg;ctx.beginPath();ctx.arc(x,yy,9,0,7);ctx.fill(); }
+    ctx.fillStyle=gunC||f.color;ctx.beginPath();ctx.arc(x,yy,3.2,0,7);ctx.fill();
     // little tracer tail toward travel direction
     const pp=Math.max(0,p-0.12);
     const px=f.x+(f.tx-f.x)*pp, py=(f.y!=null?f.y:BASE_LANE)+(((f.ty!=null?f.ty:BASE_LANE))-(f.y!=null?f.y:BASE_LANE))*pp;
     const ph=h0+(34-h0)*pp;
-    ctx.strokeStyle=f.color;ctx.globalAlpha=0.4;ctx.lineWidth=2;
+    ctx.strokeStyle=(gunC&&skinTrail())||f.color;ctx.globalAlpha=gunC?0.7:0.4;ctx.lineWidth=gunC?2.6:2;
     ctx.beginPath();ctx.moveTo(sx(px,py),sy(py)-ph);ctx.lineTo(x,yy);ctx.stroke();ctx.globalAlpha=1;}
   }
   // flying core gems (zombie drops → fly to base)
@@ -1716,13 +1736,14 @@ function draw(t){
     const tz=performance.now()/1000;
     for(const z of G.zones){ const zx=sx(z.x,z.y), zy=sy(z.y);
       const a=Math.min(1,z.t/z.max)*0.5;
+      const zc1=skinAbility(0), zc2=skinAbility(1);   // arcade ability skin, if any
       const g=ctx.createRadialGradient(zx,zy,4,zx,zy,z.r);
-      g.addColorStop(0,'rgba(150,225,70,'+(a*0.7)+')');
-      g.addColorStop(0.7,'rgba(120,200,60,'+(a*0.4)+')');
-      g.addColorStop(1,'rgba(120,200,60,0)');
+      g.addColorStop(0,zc1?skinRgba(zc1,a*0.7):'rgba(150,225,70,'+(a*0.7)+')');
+      g.addColorStop(0.7,zc2?skinRgba(zc2,a*0.4):'rgba(120,200,60,'+(a*0.4)+')');
+      g.addColorStop(1,zc2?skinRgba(zc2,0):'rgba(120,200,60,0)');
       ctx.fillStyle=g;ctx.beginPath();ctx.ellipse(zx,zy,z.r,z.r*0.42,0,0,7);ctx.fill();
       // rising fumes
-      ctx.fillStyle='rgba(170,235,90,'+(a*0.9)+')';
+      ctx.fillStyle=zc1?skinRgba(zc1,a*0.9):'rgba(170,235,90,'+(a*0.9)+')';
       for(let i=0;i<6;i++){ const px=zx+Math.cos(tz*1.3+i)*z.r*0.6;
         const py=zy-((tz*24+i*13)%40); ctx.beginPath();ctx.arc(px,py,2.2,0,7);ctx.fill(); }
     }
@@ -1794,8 +1815,9 @@ const DUST=Array.from({length:34},()=>({x:Math.random(),y:Math.random(),r:0.5+Ma
   sp:0.4+Math.random()*0.8, ph:Math.random()*7}));
 function drawAtmosphere(t){
   // 1) subtle warm-to-cool color grade for cohesion (very light)
+  const BG=ARCADE_SKINS.bg, LT=BG&&BG.light;     // arcade background skin: ambient light tint
   const grade=ctx.createLinearGradient(0,0,0,VH);
-  grade.addColorStop(0,'rgba(60,50,40,.10)');    // warm smog up top
+  grade.addColorStop(0,LT?skinRgba(LT,.10):'rgba(60,50,40,.10)');    // warm smog up top
   grade.addColorStop(0.6,'rgba(40,44,54,.05)');
   grade.addColorStop(1,'rgba(20,26,36,.18)');    // cool shadow at the feet
   ctx.fillStyle=grade;ctx.fillRect(0,0,VW,VH);
@@ -1816,13 +1838,13 @@ function drawAtmosphere(t){
   // 4) faint top light-shaft from the smog sun for depth
   ctx.save();
   const shaft=ctx.createLinearGradient(VW*0.78,0,VW*0.62,VH*0.6);
-  shaft.addColorStop(0,'rgba(255,224,168,.06)');shaft.addColorStop(1,'rgba(255,224,168,0)');
+  shaft.addColorStop(0,LT?skinRgba(LT,.06):'rgba(255,224,168,.06)');shaft.addColorStop(1,LT?skinRgba(LT,0):'rgba(255,224,168,0)');
   ctx.fillStyle=shaft;ctx.fillRect(VW*0.45,0,VW*0.55,VH*0.6);
   ctx.restore();
 }
 function drawField(t){
   // --- ominous, smog-tinted sky — palette shifts by level for a distinct mood ---
-  const SKY={
+  let SKY={
     1:['#2a2f3e','#4a4638','#6b5a44'],   // Main Street — dusty ochre
     2:['#2a2f3e','#4a4638','#6b5a44'],   // Residential — same dusk
     3:['#2b3340','#4a5248','#6a6a4e'],   // Schoolyard — grey-green overcast
@@ -1868,19 +1890,22 @@ function drawField(t){
     46:['#2a2420','#544438','#7e6a4e'], 47:['#2e2a22','#585040','#847652'],
     48:['#26262a','#4a4a52','#6e6e78'], 49:['#2a3038','#4e5a64','#728490'], 50:['#38302a','#6a5848','#a08058'],
   }[G.level||1] || ['#2a2f3e','#4a4638','#6b5a44'];
+  const BG=ARCADE_SKINS.bg;   // arcade background skin (cosmetic) — null = the level's own palette
+  if(BG) SKY=[BG.sky, mix(BG.sky,BG.fog,0.5), BG.fog];
+  const sunC=parseRGB(BG&&BG.light ? BG.light : '#ffe0a8'), sunRGB=sunC[0]+','+sunC[1]+','+sunC[2];
   const sky=ctx.createLinearGradient(0,0,0,BAND_TOP+30);
   sky.addColorStop(0,SKY[0]); sky.addColorStop(0.55,SKY[1]); sky.addColorStop(1,SKY[2]);
   ctx.fillStyle=sky; ctx.fillRect(0,0,VW,BAND_TOP+30);
   // muted sun struggling through smog
   const sunX=VW*0.78, sunY=BAND_TOP*0.42;
   const sun=ctx.createRadialGradient(sunX,sunY,4,sunX,sunY,150);
-  sun.addColorStop(0,'rgba(255,224,168,.55)');
-  sun.addColorStop(0.4,'rgba(224,180,120,.22)');
-  sun.addColorStop(1,'rgba(224,180,120,0)');
+  sun.addColorStop(0,BG&&BG.light?'rgba('+sunRGB+',.55)':'rgba(255,224,168,.55)');
+  sun.addColorStop(0.4,BG&&BG.light?'rgba('+sunRGB+',.22)':'rgba(224,180,120,.22)');
+  sun.addColorStop(1,BG&&BG.light?'rgba('+sunRGB+',0)':'rgba(224,180,120,0)');
   ctx.fillStyle=sun; ctx.fillRect(0,0,VW,BAND_TOP+30);
-  ctx.fillStyle='rgba(255,231,186,.5)';ctx.beginPath();ctx.arc(sunX,sunY,15,0,7);ctx.fill();
+  ctx.fillStyle=BG&&BG.light?'rgba('+sunRGB+',.5)':'rgba(255,231,186,.5)';ctx.beginPath();ctx.arc(sunX,sunY,15,0,7);ctx.fill();
   // soft god-ray glow fanning from the sun
-  ctx.save(); ctx.globalAlpha=0.05; ctx.fillStyle='rgba(255,224,168,1)';
+  ctx.save(); ctx.globalAlpha=0.05; ctx.fillStyle='rgba('+sunRGB+',1)';
   for(let r=0;r<7;r++){ const a=-0.5+r*0.16;
     ctx.beginPath(); ctx.moveTo(sunX,sunY);
     ctx.lineTo(sunX+Math.cos(a)*520, sunY+Math.sin(a)*520);
@@ -1897,9 +1922,13 @@ function drawField(t){
   drawSmoke(t, BAND_TOP);
   // --- background row of shops ---
   drawShops(BAND_TOP);
+  // background skin: wash the distant silhouettes in the skin's fog colour so they match the sky
+  if(BG){ ctx.fillStyle=skinRgba(BG.fog,0.28); ctx.fillRect(0,0,VW,BAND_TOP); }
   // --- street ground (worn, grimy asphalt) ---
+  const GR=BG&&BG.ground;     // background-skin ground colour, if any
   const road=ctx.createLinearGradient(0,BAND_TOP,0,BAND_TOP+BAND_H);
-  road.addColorStop(0,'#4c4f57');road.addColorStop(0.5,'#42454c');road.addColorStop(1,'#33353b');
+  if(GR){ road.addColorStop(0,lighten(GR,0.08));road.addColorStop(0.5,GR);road.addColorStop(1,darker(GR,0.25)); }
+  else { road.addColorStop(0,'#4c4f57');road.addColorStop(0.5,'#42454c');road.addColorStop(1,'#33353b'); }
   ctx.fillStyle=road; ctx.fillRect(0,BAND_TOP,VW,BAND_H);
   // grime patches on the road (static-ish, camera-parallaxed)
   ctx.fillStyle='rgba(20,22,26,.35)';
@@ -1908,11 +1937,11 @@ function drawField(t){
     ctx.beginPath();ctx.ellipse(wx+180,BAND_TOP+BAND_H*0.8,50,11,0,0,7);ctx.fill();
   }
   // curb / sidewalk at the top edge of the road
-  ctx.fillStyle='#5c606a';ctx.fillRect(0,BAND_TOP,VW,10);
-  ctx.fillStyle='#43474e';ctx.fillRect(0,BAND_TOP+10,VW,3);
+  ctx.fillStyle=GR?lighten(GR,0.2):'#5c606a';ctx.fillRect(0,BAND_TOP,VW,10);
+  ctx.fillStyle=GR?darker(GR,0.15):'#43474e';ctx.fillRect(0,BAND_TOP+10,VW,3);
   // lower sidewalk (foreground)
-  ctx.fillStyle='#2b2e34';ctx.fillRect(0,BAND_TOP+BAND_H,VW,VH-BAND_TOP-BAND_H);
-  ctx.fillStyle='#3f434b';ctx.fillRect(0,BAND_TOP+BAND_H-4,VW,4);
+  ctx.fillStyle=GR?darker(GR,0.45):'#2b2e34';ctx.fillRect(0,BAND_TOP+BAND_H,VW,VH-BAND_TOP-BAND_H);
+  ctx.fillStyle=GR?darker(GR,0.3):'#3f434b';ctx.fillRect(0,BAND_TOP+BAND_H-4,VW,4);
   // faded center road line, cracked/dashed
   ctx.fillStyle='rgba(206,190,120,.45)';
   const midY=GROUND_Y(LANES/2);
@@ -1923,7 +1952,7 @@ function drawField(t){
     ctx.beginPath();ctx.moveTo(0+(L/LANES)*BAND_H*SHEAR,y);ctx.lineTo(VW+(L/LANES)*BAND_H*SHEAR,y);ctx.stroke();}
   // --- drifting foreground haze over the whole scene ---
   const haze=ctx.createLinearGradient(0,BAND_TOP-20,0,BAND_TOP+40);
-  haze.addColorStop(0,'rgba(120,110,95,0)');haze.addColorStop(1,'rgba(120,110,95,.12)');
+  haze.addColorStop(0,BG?skinRgba(BG.fog,0):'rgba(120,110,95,0)');haze.addColorStop(1,BG?skinRgba(BG.fog,.18):'rgba(120,110,95,.12)');
   ctx.fillStyle=haze;ctx.fillRect(0,BAND_TOP-20,VW,60);
   // --- floating ash / embers drifting across the whole scene ---
   drawAsh(t);
@@ -2337,10 +2366,10 @@ function drawUnit(u,t){
     for(let i=0;i<3;i++){const a=i*2.1;ctx.beginPath();ctx.moveTo(x,y-20);ctx.lineTo(x+Math.cos(a)*12,y-20+Math.sin(a)*16);ctx.stroke();}
   }
   if(u.shieldT>0){  // Shield Wall — glowing protective bubble
-    const p=0.6+0.4*Math.sin(t2*8);
-    ctx.strokeStyle='rgba(143,198,255,'+(0.5+0.4*p)+')';ctx.lineWidth=2.5;
+    const p=0.6+0.4*Math.sin(t2*8), shc=skinAbility(0);   // arcade ability skin, if any
+    ctx.strokeStyle=shc?skinRgba(shc,0.5+0.4*p):'rgba(143,198,255,'+(0.5+0.4*p)+')';ctx.lineWidth=2.5;
     ctx.beginPath();ctx.ellipse(x,y-22,20*(u.sizeMul||1),28*(u.sizeMul||1),0,0,7);ctx.stroke();
-    ctx.fillStyle='rgba(143,198,255,.1)';ctx.fill();
+    ctx.fillStyle=shc?skinRgba(shc,0.1):'rgba(143,198,255,.1)';ctx.fill();
   }
 
   // shadow
@@ -2906,6 +2935,142 @@ function importSaveFile(file){
   r.readAsText(file);
 }
 
+// ======================== ARCADE SHOP & SKINS ========================
+// Daniel's Arcade (arcade-shop.js, loaded before this script) sells cosmetic skins and lets the
+// player trade arcade play coins for Core Shards. Skins arrive in the URL
+// (?arcadeSkins=<encodeURIComponent(JSON)>), falling back to localStorage 'daniels-arcade-skins',
+// then live through window.applyArcadeSkins after every buy/equip.
+// Shape: { gun:{bullet,glow,trail,rainbow}, ability:{primary,secondary,rainbow}, bg:{sky,fog,ground,light} }
+// PURELY COSMETIC — nothing here may touch damage, speed, range or any other mechanic.
+// Validate a skins object (or its JSON text) — anything missing/malformed becomes null = normal look.
+function parseArcadeSkins(src){
+  const hex=c=>(typeof c==='string' && /^#[0-9a-fA-F]{6}$/.test(c)) ? c.toLowerCase() : null;
+  const out={gun:null,ability:null,bg:null};
+  let o=src;
+  if(typeof src==='string'){
+    o=null;
+    try{ o=JSON.parse(src); }catch(e){ try{ o=JSON.parse(decodeURIComponent(src)); }catch(e2){} }
+  }
+  if(!o||typeof o!=='object') return out;
+  try{
+    const g=o.gun;
+    if(g && typeof g==='object' && (g.rainbow || hex(g.bullet))){
+      const b=hex(g.bullet)||'#ffcc00';
+      out.gun={name:String(g.name||''), bullet:b, glow:hex(g.glow)||b, trail:hex(g.trail)||b, rainbow:!!g.rainbow};
+    }
+    const a=o.ability;
+    if(a && typeof a==='object' && (a.rainbow || hex(a.primary))){
+      const pc=hex(a.primary)||'#feca57';
+      out.ability={name:String(a.name||''), primary:pc, secondary:hex(a.secondary)||pc, rainbow:!!a.rainbow};
+    }
+    const bg=o.bg;
+    if(bg && typeof bg==='object' && (hex(bg.sky)||hex(bg.fog)||hex(bg.ground)||hex(bg.light))){
+      const sky=hex(bg.sky)||'#2a2f3e';
+      out.bg={name:String(bg.name||''), sky, fog:hex(bg.fog)||sky, ground:hex(bg.ground), light:hex(bg.light)};
+    }
+  }catch(e){}
+  return out;
+}
+// Read ONCE at startup; afterwards only applyArcadeSkins changes it (a stale URL can't undo a buy).
+const ARCADE_SKINS=(function(){
+  let raw=null;
+  try{ raw=new URLSearchParams(window.location.search).get('arcadeSkins'); }catch(e){}
+  if(!raw){ try{ raw=localStorage.getItem('daniels-arcade-skins'); }catch(e){} }
+  return parseArcadeSkins(raw);
+})();
+// Live update from arcade-shop.js. Every colour below is resolved per frame / per effect, so
+// swapping the slots is enough — a null slot instantly falls back to the original look.
+window.applyArcadeSkins=function(skins){
+  if(skins===undefined){ try{ skins=localStorage.getItem('daniels-arcade-skins'); }catch(e){ skins=null; } }
+  const next=parseArcadeSkins(skins);
+  ARCADE_SKINS.gun=next.gun; ARCADE_SKINS.ability=next.ability; ARCADE_SKINS.bg=next.bg;
+  return ARCADE_SKINS;
+};
+// rainbow hue as #rrggbb (the colour helpers here only parse hex / rgb strings)
+function skinRainbow(offsetDeg){
+  const h=((performance.now()/8)+(offsetDeg||0))%360;
+  const f=n=>{const k=(n+h/30)%12; const v=0.5-0.5*Math.max(-1,Math.min(k-3,9-k,1));
+    return Math.round(v*255).toString(16).padStart(2,'0');};
+  return '#'+f(0)+f(8)+f(4);
+}
+// #rrggbb → rgba() with alpha (for the gradient-based backdrop / zone fills)
+function skinRgba(hex,a){ const c=parseRGB(hex); return 'rgba('+c[0]+','+c[1]+','+c[2]+','+a+')'; }
+// --- gun slot: shots fired by the player's side (clones, towers, base turret) ---
+function skinBullet(){ const g=ARCADE_SKINS.gun; return !g?null:(g.rainbow?skinRainbow(0):g.bullet); }
+function skinTrail(){  const g=ARCADE_SKINS.gun; return !g?null:(g.rainbow?skinRainbow(60):g.trail); }
+function skinGlow(){   const g=ARCADE_SKINS.gun; return !g?null:(g.rainbow?skinRainbow(30):g.glow); }
+// --- ability slot: hero active-skill effects. i even = primary, odd = secondary ---
+function skinAbility(i){
+  const a=ARCADE_SKINS.ability; if(!a)return null;
+  if(a.rainbow) return skinRainbow((i||0)*47);
+  return (i||0)%2 ? a.secondary : a.primary;
+}
+// note where the effect lists end BEFORE a skill fires, then recolour only what it added —
+// one hook covers all 8 skills' rings, particles, ricochet shots and floaters.
+function skinMark(){ return {fx:G.fx.length, fl:G.floaters.length}; }
+function skinTintSince(mk){
+  if(!ARCADE_SKINS.ability) return;
+  let k=0;
+  for(let i=mk.fx;i<G.fx.length;i++){ const f=G.fx[i]; if(f && f.color) f.color=skinAbility(k++); }
+  for(let i=mk.fl;i<G.floaters.length;i++){ const f=G.floaters[i]; if(f && f.big) f.color=skinAbility(0); }
+}
+// --- the shop itself: 🛒 buttons on the main menu and pause screen ---
+function openArcadeShop(){
+  if(!window.ArcadeShop) return;
+  if(G.running && !G.paused) setPaused(true);   // never let the battle run behind the shop
+  window.ArcadeShop.open();
+}
+document.querySelectorAll('.arcade-shop-btn').forEach(b=>{
+  if(window.ArcadeShop) b.onclick=openArcadeShop; else b.style.display='none';
+});
+// Play coins (1 per 10 min in the arcade) → Core Shards. A level pays 6–30 🔷 (B≈15, A≈22),
+// so 10 minutes ≈ 3 levels ≈ 60 🔷. Maxing everything costs ~4,600 🔷 (≈77 coins).
+const SHARDS_PER_COIN=60;
+if(window.ArcadeShop && window.ArcadeShop.setGame) window.ArcadeShop.setGame('rebuild');   // Abilities tab: REBUILD's only
+if(window.ArcadeShop && window.ArcadeShop.registerCurrency){
+  window.ArcadeShop.registerCurrency({
+    name:'Core Shards', emoji:'🔷', rate:SHARDS_PER_COIN,
+    note:'Core Shards buy permanent upgrades: more word & card slots, hero levels and stronger structures (⚙ Upgrades).',
+    grant(amount){
+      G.shards+=amount;
+      saveGame();                          // returns false if storage is blocked — progress stays in memory
+      refreshMenu();
+      const up=el('upgradePanel'); if(up && up.style.display!=='none') showUpgTab(G._upgTab||'base');
+    },
+  });
+}
+
+// ---- ⚡ Abilities: upgradable perks bought in the arcade shop (levels live in 'daniels-arcade-v1') ----
+// ArcadeShop.abilityValue reads localStorage, so the values are cached here and refreshed at startup,
+// on 'arcade-abilities-changed', and via window.applyArcadeAbilities (also mid-battle from pause).
+// Never written into the REBUILD save — they are re-derived every time, so nothing can stack.
+const ARCADE_AB={tough:0,power:0,swift:0,greed:0,regen:0,energy:0};
+function abBaseMax(){ return Math.round(100*(1+ARCADE_AB.tough/100)); }
+function refreshArcadeAbilities(levels){
+  const S=window.ArcadeShop;
+  for(const id in ARCADE_AB){
+    let v=0;
+    try{ if(S && S.abilityValue) v=levels&&typeof levels==='object' ? S.abilityValue(id,'rebuild',{abilities:levels}) : S.abilityValue(id,'rebuild'); }catch(e){ v=0; }
+    ARCADE_AB[id]=Math.max(0,+v||0);
+  }
+  // tough bought mid-battle: raise max and add the difference to current HP
+  const nextMax=abBaseMax();
+  if(G.running && typeof G.baseMax==='number'){
+    const diff=nextMax-G.baseMax;
+    G.base=diff>0 ? G.base+diff : Math.min(G.base,nextMax);
+    G.baseMax=nextMax; updateHUD();
+  }
+  return ARCADE_AB;
+}
+// player side = clones, towers, base turret (anything not team 'zombie')
+function abSide(u){ return !u || u.team!=='zombie'; }
+function abDmg(u,dmg){ return (ARCADE_AB.power>0 && abSide(u)) ? dmg*(1+ARCADE_AB.power/100) : dmg; }
+function abRate(u,rate){ return (ARCADE_AB.swift>0 && abSide(u)) ? rate/(1+ARCADE_AB.swift/100) : rate; }
+function abShards(n){ return ARCADE_AB.greed>0 ? Math.round(n*(1+ARCADE_AB.greed/100)) : n; }
+window.applyArcadeAbilities=(levels)=>refreshArcadeAbilities(levels);
+window.addEventListener('arcade-abilities-changed',ev=>refreshArcadeAbilities(ev && ev.detail));
+refreshArcadeAbilities();
+
 let cheatBuf='';
 window.addEventListener('keydown',ev=>{const k=ev.key.toLowerCase();
   // cheat code: type S-K-I-P anytime during a battle to auto-win with an S rating
@@ -2925,7 +3090,7 @@ function cheatSkip(){
   toast('⏭ SKIP — level cleared');
   const lv=G.level||1;
   // force a top-tier settlement
-  const s={effStars:5,baseStars:5,speedStars:5,noLoss:true,grade:'S',shards:30,eff:5,isNewBest:false};
+  const s={effStars:5,baseStars:5,speedStars:5,noLoss:true,grade:'S',shards:abShards(30),eff:5,isNewBest:false};
   const order={D:0,C:1,B:2,A:3,S:4};
   if(!G.bestGrade[lv] || order['S']>order[G.bestGrade[lv]]){ G.bestGrade[lv]='S'; s.isNewBest=true; }
   G.shards+=s.shards;
@@ -3585,7 +3750,7 @@ el('exitBtn').onclick=()=>{ resetBattle(); showMenu(); };
 function resetBattle(){
   G.units=[];G.fx=[];G.floaters=[];G.nodes=[];G.reviveQueue=[];G.fallen=[];G.zones=[];
   G.boxes=Array(G.wordSlots).fill('');G.hand=[];G.cooldown={};G.dragCard=null;
-  G.prodTimer=0;G.energySpent=0;G.enemyPower=0;G.lostUnits=0;G._lastGold=undefined;
+  G.prodTimer=0;G._regenT=0;G.energySpent=0;G.enemyPower=0;G.lostUnits=0;G._lastGold=undefined;
   G.trayLocked=false;G.teachSeq=null;G.teachPos=0;G.teachSpell=null;
   G.waves=null;G.waveIdx=0;G.waveTimer=0;
   G.riftOn=false;G.riftEnergy=0;G.riftRate=0;G.riftTime=0;G.riftCoolT=0;G.riftPool=[];G._eliteSpawned=false;
@@ -3605,7 +3770,7 @@ function startLevel(n){
     if(l1FirstTime) G.unlocked=new Set();      // fresh start only the very first time
     else G.unlocked.add('cook');               // replay: cook already learned
   }
-  G.base=100; G.gold=START_ENERGY; G.rerollCost=15; firstTray=true; rollTray();
+  G.baseMax=abBaseMax(); G.base=G.baseMax; G.gold=START_ENERGY+ARCADE_AB.energy; G.rerollCost=15; firstTray=true; rollTray();   // ⚡ tough raises base max HP, energy = head start
   G.running=true; G.paused=false;
   G.trayLocked=l1FirstTime;                     // only lock the tray on the first-ever L1
   G.teachSeq=null; G.teachPos=0;
@@ -3766,7 +3931,7 @@ function computeSettlement(){
   const eff = G.energySpent>0 ? G.enemyPower/G.energySpent : G.enemyPower;
   // map each metric to 1..5 stars (tuned for the tutorial scale)
   const effStars  = Math.max(1, Math.min(5, Math.round(eff*2.2)));
-  const baseStars = Math.max(1, Math.min(5, Math.round(G.base/100*5)));
+  const baseStars = Math.max(1, Math.min(5, Math.round(G.base/(G.baseMax||100)*5)));
   const secs = (performance.now()-(G.battleStart||performance.now()))/1000;
   const speedStars= Math.max(1, Math.min(5, Math.round(6 - secs/30)));   // <30s≈5★, slower drops
   const noLoss = G.lostUnits===0;
@@ -3775,7 +3940,7 @@ function computeSettlement(){
   let grade = score>=4.4?'S': score>=3.6?'A': score>=2.6?'B': score>=1.8?'C':'D';
   // shard reward scaled by grade (S ≈ 3× C)
   const gradeShards={S:30,A:22,B:15,C:10,D:6}[grade];
-  return {effStars,baseStars,speedStars,noLoss,grade,shards:gradeShards,eff};
+  return {effStars,baseStars,speedStars,noLoss,grade,shards:abShards(gradeShards),eff};   // ⚡ greed
 }
 // ---- post-level story dialogue ----
 // AI speech evolves with recovery; {boy}/{ai} are replaced with the chosen names.
@@ -4468,7 +4633,7 @@ function settlementScreen(s){
       (s.isNewBest?'<span class="newbest">NEW BEST!</span>':'')+'</div>'+
     '<div class="rate-rows">'+
       rateRow('Efficiency', s.effStars, 'enemy power ÷ energy spent')+
-      rateRow('Base integrity', s.baseStars, Math.round(G.base)+'% HP remaining')+
+      rateRow('Base integrity', s.baseStars, Math.round(G.base/(G.baseMax||100)*100)+'% HP remaining')+
       rateRow('Speed', s.speedStars, 'clear time')+
       (s.noLoss?'<div class="rate-bonus">✦ FLAWLESS — no clones lost (+bonus)</div>':'')+
     '</div>'+
@@ -4526,5 +4691,6 @@ function init(){
 init();
 })();
 </script>
+<script defer src="nullp-widget.js" data-game="REBUILD"></script>
 </body>
 </html>
