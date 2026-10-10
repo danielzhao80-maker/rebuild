@@ -222,6 +222,23 @@ Post-level dialogue is a simple text box + simple avatars (no elaborate cutscene
 
 ---
 
+## Tests
+
+Permanent automated test for the Daniel's Arcade integration (shop, Core Shards trade + 20/day
+cap, the 6 ⚡ abilities + 3-slot bar, secret agent ability, Super Mode, skins, no Codes tab):
+
+```bash
+cd rebuild
+npm install              # once: installs jsdom (devDependency; node_modules/ is git-ignored)
+node tools/test-arcade.js   # or: npm test
+```
+
+It loads `index.html` + `arcade-shop.js` into jsdom and ends with `ARCADE TEST PASS` or
+`ARCADE TEST FAIL (n)` (nonzero exit on failure). Run it after any change to the arcade code in
+`index.html` or after copying a new `arcade-shop.js` in. If `npm install` is impossible (offline),
+point `NODE_PATH` at any `node_modules` that contains jsdom: `NODE_PATH=/path/to/node_modules node tools/test-arcade.js`.
+The hook it injects relies on the script ending with `init();\n})();` — keep that.
+
 ## 7. The test harness pattern (copy/paste starting point)
 
 Every feature was verified this way. Stub the browser, eval the script, expose internals via

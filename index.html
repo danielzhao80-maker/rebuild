@@ -3050,7 +3050,9 @@ function refreshArcadeAbilities(levels){
   const S=window.ArcadeShop;
   for(const id in ARCADE_AB){
     let v=0;
-    try{ if(S && S.abilityValue) v=levels&&typeof levels==='object' ? S.abilityValue(id,'rebuild',{abilities:levels}) : S.abilityValue(id,'rebuild'); }catch(e){ v=0; }
+    // `levels` (passed by the shop) only carries ability levels: merge it into the full save so the
+    // ⚡ bar's on/off choice (save.active) and admin Super Mode (save.admin) still count.
+    try{ if(S && S.abilityValue) v=levels&&typeof levels==='object' ? S.abilityValue(id,'rebuild',{...S.load(),abilities:levels}) : S.abilityValue(id,'rebuild'); }catch(e){ v=0; }
     ARCADE_AB[id]=Math.max(0,+v||0);
   }
   // tough bought mid-battle: raise max and add the difference to current HP

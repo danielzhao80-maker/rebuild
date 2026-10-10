@@ -1,0 +1,11 @@
+{
+  "name": "rebuild",
+  "private": true,
+  "description": "REBUILD - single-file browser game. package.json exists only for the dev test harness.",
+  "scripts": {
+    "test": "node tools/test-arcade.js"
+  },
+  "devDependencies": {
+    "jsdom": "^24.1.3"
+  }
+}
