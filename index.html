@@ -1231,7 +1231,7 @@ function updateUnit(u,dt){
       } else {
         // tutorial: our tower can't be destroyed — the level ends only by breaking the portal
         G.baseHpShow=2.2;
-        if(!G.tutorial){ G.base-=u.def.dmg*0.5; if(G.base<=0)gameOver(); }
+        if(!G.tutorial){ G.base-=u.def.dmg*0.5; G.minBase=Math.min(G.minBase??G.base,G.base); if(G.base<=0)gameOver(); }
       }
       updateHUD(); hitSpark(baseX,u.y,u.team==='ally'?'#ff6b5e':'#8fffce'); } }
     return;
@@ -3772,7 +3772,7 @@ function startLevel(n){
     if(l1FirstTime) G.unlocked=new Set();      // fresh start only the very first time
     else G.unlocked.add('cook');               // replay: cook already learned
   }
-  G.baseMax=abBaseMax(); G.base=G.baseMax; G.gold=START_ENERGY+ARCADE_AB.energy; G.rerollCost=15; firstTray=true; rollTray();   // ⚡ tough raises base max HP, energy = head start
+  G.baseMax=abBaseMax(); G.base=G.baseMax; G.minBase=G.base; G.gold=START_ENERGY+ARCADE_AB.energy; G.rerollCost=15; firstTray=true; rollTray();   // ⚡ tough raises base max HP, energy = head start
   G.running=true; G.paused=false;
   G.trayLocked=l1FirstTime;                     // only lock the tray on the first-ever L1
   G.teachSeq=null; G.teachPos=0;
@@ -3928,6 +3928,17 @@ function onPortalDestroyed(){
   setTimeout(()=>victory(), 1700);
 }
 function stars(n){ return '★★★★★'.slice(0,n)+'☆☆☆☆☆'.slice(0,5-n); }
+// ⚡ Fast Comebacker (Daniel's Arcade title): the base hit 1 HP — as the HUD shows it — and you
+// still won the battle.
+function checkComeback(){
+  const low=G.minBase;
+  if(G.tutorial || !(low>0) || Math.round(low)>1) return;
+  const S=window.ArcadeShop; if(!S||!S.update) return;
+  let fresh=false;
+  S.update(s=>{ if(s.owned.includes('comeback')) return; s.owned=[...s.owned,'comeback']; s.equipped.title='comeback'; fresh=true; });
+  S.toast(fresh ? '⚡ FAST COMEBACKER! Won with your base on 1 HP — title unlocked!' : '⚡ Fast comeback! Won with your base on 1 HP!');
+}
+
 function computeSettlement(){
   // Efficiency = enemy power defeated ÷ energy spent (higher = better)
   const eff = G.energySpent>0 ? G.enemyPower/G.energySpent : G.enemyPower;
@@ -4614,7 +4625,7 @@ function avatarFor(who){
   return ({boy:boyAvatar, ai:aiAvatar, okafor:okaforAvatar, dad:dadAvatar,
            mom:momAvatar, sister:sisterAvatar})[who] || boyAvatar;
 }
-function victory(){G.running=false;sfx('unlock');
+function victory(){G.running=false;sfx('unlock');checkComeback();
   const s=computeSettlement(); G.shards+=s.shards;
   const lv=G.level||1, order={D:0,C:1,B:2,A:3,S:4};
   if(!G.bestGrade[lv] || order[s.grade]>order[G.bestGrade[lv]]){ G.bestGrade[lv]=s.grade; s.isNewBest=true; }

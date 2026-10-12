@@ -25,7 +25,7 @@ const HTML = fs.readFileSync(path.join(R, "index.html"), "utf8");
 const SHOP_JS = fs.readFileSync(path.join(R, "arcade-shop.js"), "utf8");
 const SAVE_KEY = "project-revive-save-v1", ARCADE_KEY = "daniels-arcade-v1", SKINS_KEY = "daniels-arcade-skins";
 const HOOK = "window.__hook={G,saveGame,loadGame,collectSave,draw,fireSkill,spawnUnit,startLevel,projectile," +
-  "ARCADE_SKINS,ARCADE_AB,setPaused,update,updateUnit,updateBaseTurret,applyHit,computeSettlement,loop};";
+  "ARCADE_SKINS,ARCADE_AB,setPaused,update,updateUnit,updateBaseTurret,applyHit,computeSettlement,loop,victory,checkComeback};";
 
 let pass = 0, fail = 0, section = "";
 const ok = (name, cond) => { if (cond) pass++; else { fail++; console.log(`  FAIL [${section}] ${name}`); } };
@@ -418,6 +418,21 @@ r.$(".as-bar .tab").click(); r.$(".as-bar .shop").click();
 ok("bar's shop button opens Abilities, no Codes tab", r.S.isOpen() && r.$(".as-tabs button.on").textContent === r.S.ABILITY_TAB && !r.tabs().includes(r.S.CODES_TAB));
 ok("secret never triggered", !secretCalled);
 r.S.close();
+
+sect("⚡ Fast Comebacker title");
+{
+  const owns = (r) => (JSON.parse(r.w.localStorage.getItem(ARCADE_KEY) || "{}").owned || []).includes("comeback");
+  const battle = (minBase) => { const r = start({ [ARCADE_KEY]: { coins: 0 }, [SAVE_KEY]: GAME_SAVE }); r.h.startLevel(2);
+    if (minBase !== undefined) { r.h.G.base = minBase; r.h.G.minBase = minBase; } return r; };
+  let r1 = battle(); ok("a new battle remembers the base's lowest HP (full)", r1.h.G.minBase === r1.h.G.baseMax);
+  r1 = battle(1); r1.h.victory(); ok("win with the base on 1 HP → title", owns(r1));
+  ok("…and it's put on", JSON.parse(r1.w.localStorage.getItem(ARCADE_KEY)).equipped.title === "comeback");
+  r1 = battle(0.6); r1.h.victory(); ok("win after the base showed 1 HP (0.6) → title", owns(r1));
+  r1 = battle(2); r1.h.victory(); ok("lowest was 2 HP → no title", !owns(r1));
+  r1 = battle(); r1.h.victory(); ok("never hurt → no title", !owns(r1));
+  r1 = battle(1); r1.h.G.tutorial = true; r1.h.victory(); ok("tutorial doesn't count", !owns(r1));
+  r1 = battle(1); r1.h.G.base = 60; r1.h.victory(); ok("healed back up after hitting 1 HP still counts", owns(r1));
+}
 
 sect("without arcade-shop.js");
 r = start({ [SAVE_KEY]: GAME_SAVE }, "", { withShop: false });
