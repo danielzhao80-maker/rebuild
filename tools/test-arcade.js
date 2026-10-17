@@ -177,28 +177,28 @@ sect("Core Shards trade + 20/day cap");
 h.G.running = false;
 menuBtn.click();
 $('[data-q="5"]').click(); $("[data-trade]").click();
-ok("5 coins -> +300 shards (" + h.G.shards + ")", h.G.shards === 307);
+ok("5 coins -> +285 shards at 57/coin (" + h.G.shards + ")", h.G.shards === 292);
 ok("coins 30 -> 25", r.arcade().coins === 25);
 ok("daily counter rebuild = 5", r.arcade().daily.day === todayKey() && r.arcade().daily.trade.rebuild === 5);
 ok("tradeLeft = 15", S.tradeLeft("rebuild") === 15);
-ok("shards saved to REBUILD save", JSON.parse(w.localStorage.getItem(SAVE_KEY)).shards === 307);
-ok("menu counter refreshed", w.document.getElementById("mShards").textContent === "307");
+ok("shards saved to REBUILD save", JSON.parse(w.localStorage.getItem(SAVE_KEY)).shards === 292);
+ok("menu counter refreshed", w.document.getElementById("mShards").textContent === "292");
 ok("cap text 5 / 20", $(".as-cur").textContent.includes("5 / 20"));
 const maxBtn = $$("[data-q]").find((b) => /Max/.test(b.textContent));
 ok("Max button limited by cap (15)", maxBtn && maxBtn.dataset.q === "15");
 const inp = $("[data-amount]"); inp.value = "99"; inp.dispatchEvent(new w.Event("input", { bubbles: true }));
 ok("typing 99 clamps to 15", $("[data-trade]").textContent.includes("15"));
 $("[data-trade]").click();
-ok("traded 15 more -> 1207 shards", h.G.shards === 1207);
+ok("traded 15 more -> 1147 shards", h.G.shards === 1147);
 ok("coins 25 -> 10", r.arcade().coins === 10);
 ok("daily counter = 20", r.arcade().daily.trade.rebuild === 20 && S.tradeLeft("rebuild") === 0);
 ok("trade button disabled at cap", $("[data-trade]").disabled);
 ok("cap reached message", $(".as-cur").textContent.includes("Daily trade cap reached"));
 $("[data-trade]").disabled = false; $("[data-trade]").click();      // even a forced click must not trade
-ok("forced click past the cap trades nothing", h.G.shards === 1207 && r.arcade().coins === 10);
+ok("forced click past the cap trades nothing", h.G.shards === 1147 && r.arcade().coins === 10);
 S.close();
 h.G.shards = 0; h.loadGame();
-ok("shards survive loadGame", h.G.shards === 1207);
+ok("shards survive loadGame", h.G.shards === 1147);
 ok("no runtime errors: " + r.errs.join(" | "), r.errs.length === 0);
 
 sect("trade cap persistence + daily reset");
@@ -210,7 +210,7 @@ r.S.close();
 r = start({ [ARCADE_KEY]: { coins: 30, daily: { day: "2000-1-1", play: 0, bugs: 0, trade: { rebuild: 20 } } }, [SAVE_KEY]: GAME_SAVE });
 ok("old day's counter resets", r.S.tradeLeft("rebuild") === 20);
 r.S.open(); r.$('[data-q="10"]').click(); r.$("[data-trade]").click();
-ok("trade works after reset", r.h.G.shards === 607 && r.arcade().daily.day === todayKey() && r.arcade().daily.trade.rebuild === 10);
+ok("trade works after reset", r.h.G.shards === 577 && r.arcade().daily.day === todayKey() && r.arcade().daily.trade.rebuild === 10);
 r.S.close();
 
 // ================================================================== 2. abilities
