@@ -3023,7 +3023,7 @@ function openArcadeShop(){
 document.querySelectorAll('.arcade-shop-btn').forEach(b=>{
   if(window.ArcadeShop) b.onclick=openArcadeShop; else b.style.display='none';
 });
-// Play coins (1 per 10 min in the arcade) → Core Shards. A level pays 6–30 🔷 (B≈15, A≈22),
+// Play coins (1 per 15 min in the arcade) → Core Shards. A level pays 6–30 🔷 (B≈15, A≈22),
 // so 10 minutes ≈ 3 levels ≈ 60 🔷. Maxing everything costs ~4,600 🔷 (≈77 coins).
 const SHARDS_PER_COIN=60;
 if(window.ArcadeShop && window.ArcadeShop.setGame) window.ArcadeShop.setGame('rebuild');   // Abilities tab: REBUILD's only
