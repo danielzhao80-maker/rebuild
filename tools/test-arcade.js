@@ -434,6 +434,21 @@ sect("⚡ Fast Comebacker title");
   r1 = battle(1); r1.h.G.base = 60; r1.h.victory(); ok("healed back up after hitting 1 HP still counts", owns(r1));
 }
 
+sect("🎃 Halloween candy for a win (one time only)");
+{
+  const Y = new Date().getFullYear();
+  const candy = (r) => +(r.w.localStorage.getItem("monster_attack_candy") || 0);
+  const win = (extra) => { const r = start({ [ARCADE_KEY]: { coins: 0 }, [SAVE_KEY]: GAME_SAVE, ...extra }); r.h.startLevel(2); r.h.victory(); return r; };
+  let r2 = win({ monster_attack_event_force: "halloween" });
+  ok("first win at Halloween: +10 candy (wallet and pass)", candy(r2) === 10 && r2.w.localStorage.getItem("monster_attack_hw_earned_" + Y) === "10");
+  r2.h.startLevel(2); r2.h.victory();
+  ok("a second win gives nothing — one time only", candy(r2) === 10);
+  r2 = win({ monster_attack_event_force: "halloween", ["monster_attack_hw_treat_" + Y]: "1" });
+  ok("with Nullp's treat boost: +11", candy(r2) === 11);
+  r2 = win({ monster_attack_event_force: "off" });
+  ok("no candy outside Halloween", candy(r2) === 0 && r2.w.localStorage.getItem("monster_attack_hw_once_rebuild_" + Y) === null);
+}
+
 sect("without arcade-shop.js");
 r = start({ [SAVE_KEY]: GAME_SAVE }, "", { withShop: false });
 ok("game boots without the shop", !!r.h && r.errs.length === 0);

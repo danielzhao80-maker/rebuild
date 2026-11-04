@@ -3938,6 +3938,15 @@ function checkComeback(){
   S.update(s=>{ if(s.owned.includes('comeback')) return; s.owned=[...s.owned,'comeback']; s.equipped.title='comeback'; fresh=true; });
   S.toast(fresh ? '⚡ FAST COMEBACKER! Won with your base on 1 HP — title unlocked!' : '⚡ Fast comeback! Won with your base on 1 HP!');
 }
+// 🎃 Halloween: your FIRST won battle of the event gives 10 candy (11 with Nullp's treat boost) for
+// Monster Attack!'s Halloween Pass — a one-time reward.
+function halloweenWinCandy(){
+  const H=window.ArcadeShop&&window.ArcadeShop.halloween;
+  const n=H?H.winCandyOnce('rebuild',10):0;
+  if(n>0) setTimeout(()=>window.ArcadeShop.toast(`🎃 +${n} candy for your Halloween win! (one time only)${H.treatBoost()?' 🍬 Nullp treat +10%':''}`),1200);
+  return n;
+}
+
 
 function computeSettlement(){
   // Efficiency = enemy power defeated ÷ energy spent (higher = better)
@@ -4625,7 +4634,7 @@ function avatarFor(who){
   return ({boy:boyAvatar, ai:aiAvatar, okafor:okaforAvatar, dad:dadAvatar,
            mom:momAvatar, sister:sisterAvatar})[who] || boyAvatar;
 }
-function victory(){G.running=false;sfx('unlock');checkComeback();
+function victory(){G.running=false;sfx('unlock');checkComeback();halloweenWinCandy();
   const s=computeSettlement(); G.shards+=s.shards;
   const lv=G.level||1, order={D:0,C:1,B:2,A:3,S:4};
   if(!G.bestGrade[lv] || order[s.grade]>order[G.bestGrade[lv]]){ G.bestGrade[lv]=s.grade; s.isNewBest=true; }
