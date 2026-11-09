@@ -444,7 +444,7 @@ sect("🎃 Halloween candy for a win (one time only)");
   r2.h.startLevel(2); r2.h.victory();
   ok("a second win gives nothing — one time only", candy(r2) === 10);
   r2 = win({ monster_attack_event_force: "halloween", ["monster_attack_hw_treat_" + Y]: "1" });
-  ok("with Nullp's treat boost: +11", candy(r2) === 11);
+  ok("the old Nullp treat boost is gone: still +10", candy(r2) === 10);
   r2 = win({ monster_attack_event_force: "off" });
   ok("no candy outside Halloween", candy(r2) === 0 && r2.w.localStorage.getItem("monster_attack_hw_once_rebuild_" + Y) === null);
 }
